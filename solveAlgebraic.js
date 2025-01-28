@@ -1,6 +1,6 @@
 const vision = require('@google-cloud/vision');
-const algebra = require('algebra.js');
 const sharp = require('sharp');
+const axios = require('axios');
 
 // Initialize Google Cloud Vision client
 const client = new vision.ImageAnnotatorClient({
@@ -42,58 +42,38 @@ async function extractTextFromImage(imagePath) {
     }
 }
 
-// Solve algebraic equation with detailed steps
-function solveAlgebraicEquationDetailed(text) {
-    const steps = [];
-    const equationMatch = text.match(/([a-zA-Z0-9\s\+\-\*\/\=]+)/);
+// Use Wolfram Alpha API to solve the equation
+async function solveEquationWithWolframAlpha(equation) {
+    const appId = 'YOUR_WOLFRAM_ALPHA_APPID'; // Replace with your Wolfram Alpha AppID
+    const apiUrl = `http://api.wolframalpha.com/v2/query`;
 
-    if (equationMatch) {
-        const equationString = equationMatch[0];
-        try {
-            const equation = algebra.parse(equationString);
-            if (equation instanceof algebra.Equation) {
-                steps.push(`Step 1: Extracted equation: ${equationString}`);
+    try {
+        const response = await axios.get(apiUrl, {
+            params: {
+                input: equation,
+                format: 'plaintext',
+                output: 'JSON',
+                appid: appId,
+            },
+        });
 
-                // Start solving step-by-step
-                let leftSide = equation.lhs.toString();
-                let rightSide = equation.rhs.toString();
-                steps.push(`Step 2: Start with the equation: ${leftSide} = ${rightSide}`);
-
-                // Identify the variable
-                const variable = equation.lhs.terms.find(term => term.variable)?.variable || 'x';
-                steps.push(`Step 3: Identify the variable to solve for: '${variable}'`);
-
-                // Step 1: Move constants to the other side
-                const constantTerm = equation.lhs.terms.find(term => term.coefficients.length === 0);
-                if (constantTerm) {
-                    rightSide = `${rightSide} - ${constantTerm}`;
-                    leftSide = leftSide.replace(`+ ${constantTerm}`, '').replace(`- ${constantTerm}`, '');
-                    steps.push(`Step 4: Move constants to the other side: ${leftSide} = ${rightSide}`);
-                }
-
-                // Step 2: Solve for the coefficient of the variable
-                const variableTerm = equation.lhs.terms.find(term => term.variable === variable);
-                if (variableTerm) {
-                    const coefficient = variableTerm.coefficients[0];
-                    rightSide = `(${rightSide}) / ${coefficient}`;
-                    leftSide = variable;
-                    steps.push(`Step 5: Solve for the variable: ${leftSide} = ${rightSide}`);
-                }
-
-                // Evaluate the final solution
-                const solution = eval(rightSide); // Calculate the numeric value
-                steps.push(`Step 6: Final solution: ${variable} = ${solution}`);
-            } else {
-                steps.push("No valid equation found.");
-            }
-        } catch (error) {
-            steps.push(`Error solving the equation: ${error.message}`);
+        const pods = response.data.queryresult.pods;
+        const stepByStepPod = pods.find(pod => pod.title.toLowerCase().includes('step-by-step'));
+        if (stepByStepPod) {
+            return stepByStepPod.subpods.map(subpod => subpod.plaintext).join('\n');
         }
-    } else {
-        steps.push("No valid equation found.");
-    }
 
-    return steps;
+        // Fallback to other pods if step-by-step is not available
+        const solutionPod = pods.find(pod => pod.title.toLowerCase().includes('result') || pod.title.toLowerCase().includes('solution'));
+        if (solutionPod) {
+            return solutionPod.subpods.map(subpod => subpod.plaintext).join('\n');
+        }
+
+        return 'No detailed solution available.';
+    } catch (error) {
+        console.error('Error with Wolfram Alpha API:', error);
+        throw error;
+    }
 }
 
 // Main function
@@ -106,16 +86,13 @@ async function solveImageQuestion(imagePath) {
         const extractedText = await extractTextFromImage(processedImagePath);
 
         const cleanedText = validateAndCleanText(extractedText);
-        const steps = solveAlgebraicEquationDetailed(cleanedText);
+        console.log('Cleaned Text:', cleanedText);
 
-        if (steps.length > 0) {
-            console.log('Step-by-step solution:');
-            steps.forEach((step, index) => {
-                console.log(`Step ${index + 1}: ${step}`);
-            });
-        } else {
-            console.log('No solvable algebraic equation detected.');
-        }
+        console.log('Solving the equation with Wolfram Alpha...');
+        const detailedSteps = await solveEquationWithWolframAlpha(cleanedText);
+
+        console.log('Step-by-step solution:');
+        console.log(detailedSteps);
     } catch (error) {
         console.error('Error processing the image:', error);
     }
