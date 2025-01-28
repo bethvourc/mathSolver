@@ -4,7 +4,7 @@ const sharp = require('sharp');
 
 // Initialize Google Cloud Vision client
 const client = new vision.ImageAnnotatorClient({
-    keyFilename: 'path-to-your-service-account-key.json', // Replace with your JSON key file path
+    keyFilename: '', // Replace with your JSON key file path
 });
 
 // Preprocess the image using Sharp
@@ -51,41 +51,55 @@ function solveAlgebraicEquationDetailed(text) {
         const equationString = equationMatch[0];
         try {
             const equation = algebra.parse(equationString);
-            if (equation instanceof algebra.Equation) {
-                steps.push(`Step 1: Extracted equation: ${equationString}`);
-
-                // Start solving step-by-step
-                let leftSide = equation.lhs.toString();
-                let rightSide = equation.rhs.toString();
-                steps.push(`Step 2: Start with the equation: ${leftSide} = ${rightSide}`);
-
-                // Identify the variable
-                const variable = equation.lhs.terms.find(term => term.variable)?.variable || 'x';
-                steps.push(`Step 3: Identify the variable to solve for: '${variable}'`);
-
-                // Step 1: Move constants to the other side
-                const constantTerm = equation.lhs.terms.find(term => term.coefficients.length === 0);
-                if (constantTerm) {
-                    rightSide = `${rightSide} - ${constantTerm}`;
-                    leftSide = leftSide.replace(`+ ${constantTerm}`, '').replace(`- ${constantTerm}`, '');
-                    steps.push(`Step 4: Move constants to the other side: ${leftSide} = ${rightSide}`);
-                }
-
-                // Step 2: Solve for the coefficient of the variable
-                const variableTerm = equation.lhs.terms.find(term => term.variable === variable);
-                if (variableTerm) {
-                    const coefficient = variableTerm.coefficients[0];
-                    rightSide = `(${rightSide}) / ${coefficient}`;
-                    leftSide = variable;
-                    steps.push(`Step 5: Solve for the variable: ${leftSide} = ${rightSide}`);
-                }
-
-                // Evaluate the final solution
-                const solution = eval(rightSide); // Calculate the numeric value
-                steps.push(`Step 6: Final solution: ${variable} = ${solution}`);
-            } else {
+            if (!(equation instanceof algebra.Equation)) {
                 steps.push("No valid equation found.");
+                return steps;
             }
+
+            steps.push(`Extracted equation: ${equationString}`);
+            let currentEquation = equation;
+            steps.push(`Start with the equation: ${currentEquation.toString()}`);
+
+            // Separate variable and constant terms
+            let variableTerm = null;
+            let constantSum = 0;
+            currentEquation.lhs.terms.forEach(term => {
+                if (term.variables.length > 0) {
+                    variableTerm = term;
+                } else {
+                    constantSum += term.coefficients[0]; // Sum all constant terms
+                }
+            });
+
+            if (constantSum !== 0) {
+                currentEquation = new algebra.Equation(
+                    currentEquation.lhs.subtract(constantSum),
+                    currentEquation.rhs.subtract(constantSum)
+                );
+                steps.push(`Move constants to the other side: ${currentEquation.toString()}`);
+            } else {
+                steps.push(' No constants to move.');
+            }
+
+            // Divide by the coefficient of the variable
+            if (!variableTerm) {
+                steps.push("Error: No variable found in the equation.");
+                return steps;
+            }
+
+            const coefficient = variableTerm.coefficients[0];
+            if (coefficient !== 1) {
+                currentEquation = new algebra.Equation(
+                    currentEquation.lhs.divide(coefficient),
+                    currentEquation.rhs.divide(coefficient)
+                );
+                steps.push(`Divide by the coefficient of the variable: ${currentEquation.toString()}`);
+            }
+
+            // Final solution
+            const rhsString = currentEquation.rhs.toString();
+            const solution = eval(rhsString); // Evaluate the numeric output
+            steps.push(`Step 5: Final solution: ${variableTerm.variables[0]} = ${solution}`);
         } catch (error) {
             steps.push(`Error solving the equation: ${error.message}`);
         }
@@ -132,4 +146,4 @@ function validateAndCleanText(text) {
 }
 
 // Run the program
-solveImageQuestion('/mnt/data/image.jpeg');
+solveImageQuestion('');
