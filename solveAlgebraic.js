@@ -5,12 +5,12 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Google Vision API Setup
 const googleClient = new vision.ImageAnnotatorClient({
-  keyFilename: "", 
+  keyFilename: "",
 });
 
 // Gemini AI Setup
-const genAI = new GoogleGenerativeAI(""); 
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); 
+const genAI = new GoogleGenerativeAI("");
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 // Preprocess Image Using Sharp for Better OCR
 async function preprocessImage(imagePath) {
@@ -37,8 +37,7 @@ async function extractTextFromImage(imagePath) {
     const [result] = await googleClient.textDetection(imagePath);
     const detections = result.textAnnotations;
     if (detections && detections.length > 0) {
-      console.log("Extracted Text:", detections[0].description);
-      return detections[0].description; // Return extracted equation
+      return detections[0].description; // Return extracted text
     } else {
       throw new Error("No text detected in the image.");
     }
@@ -65,28 +64,24 @@ async function solveEquationWithGemini(equation) {
   }
 }
 
-// Main Function to Process Image and Solve Equation
-async function solveImageQuestion(imagePath) {
+// Gemini AI for Checking Work
+async function checkWorkWithGemini(studentWork, problem) {
   try {
-    console.log("Preprocessing the image...");
-    const processedImagePath = await preprocessImage(imagePath);
+    const prompt = `Check the following student work for the given math problem and provide annotations on any errors or areas for improvement:\n\nProblem: ${problem}\nStudent Work: ${studentWork}`;
+    const result = await model.generateContent(prompt);
 
-    console.log("Extracting text using Google Vision...");
-    const extractedText = await extractTextFromImage(processedImagePath);
-    const cleanedText = validateAndCleanText(extractedText);
-    console.log("Cleaned Text:", cleanedText);
+    if (result && result.response && result.response.text()) {
+      return result.response.text();
+    }
 
-    console.log("Solving equation using Gemini AI...");
-    const solution = await solveEquationWithGemini(cleanedText);
-
-    console.log("\nFinal Solution:");
-    console.log(solution);
+    return "No annotations available.";
   } catch (error) {
-    console.error("Error processing the image:", error);
+    console.error("Error with Gemini AI:", error.response?.data || error.message);
+    throw error;
   }
 }
 
-// Clean and Validate Extracted Equation
+// Clean and Validate Extracted Text
 function validateAndCleanText(text) {
   const equationRegex = /[a-zA-Z0-9\+\-\*\/\=\s]+/g;
   const matches = text.match(equationRegex);
@@ -96,5 +91,44 @@ function validateAndCleanText(text) {
   return text;
 }
 
+// Main Function to Process Image and Solve/Check Equation
+async function processImageQuestion(imagePath) {
+  try {
+    console.log("Preprocessing the image...");
+    const processedImagePath = await preprocessImage(imagePath);
+
+    console.log("Extracting text using Google Vision...");
+    const extractedText = await extractTextFromImage(processedImagePath);
+
+    if (extractedText.includes("QTAR")) {
+      console.log("Detected 'QTAR': Solving the equation.");
+      const equation = extractedText.replace("QTAR", "").trim();
+      const cleanedEquation = validateAndCleanText(equation);
+      console.log("Cleaned Equation:", cleanedEquation);
+
+      console.log("Solving equation using Gemini AI...");
+      const solution = await solveEquationWithGemini(cleanedEquation);
+
+      console.log("\nFinal Solution:");
+      console.log(solution);
+    } else if (extractedText.includes("CTAR")) {
+      console.log("Detected 'CTAR': Checking student work.");
+      const parts = extractedText.split("CTAR");
+      const problem = parts[0].trim();
+      const studentWork = parts[1].trim();
+
+      console.log("Checking work using Gemini AI...");
+      const annotations = await checkWorkWithGemini(studentWork, problem);
+
+      console.log("\nAnnotations:");
+      console.log(annotations);
+    } else {
+      console.log("No 'QTAR' or 'CTAR' detected in the image.");
+    }
+  } catch (error) {
+    console.error("Error processing the image:", error);
+  }
+}
+
 // Run the Program
-solveImageQuestion("");
+processImageQuestion("");
