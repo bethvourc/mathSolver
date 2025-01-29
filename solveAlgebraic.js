@@ -1,149 +1,134 @@
-const vision = require('@google-cloud/vision');
-const algebra = require('algebra.js');
-const sharp = require('sharp');
+const axios = require("axios");
+const vision = require("@google-cloud/vision");
+const sharp = require("sharp");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Initialize Google Cloud Vision client
-const client = new vision.ImageAnnotatorClient({
-    keyFilename: '', // Replace with your JSON key file path
+// Google Vision API Setup
+const googleClient = new vision.ImageAnnotatorClient({
+  keyFilename: "",
 });
 
-// Preprocess the image using Sharp
+// Gemini AI Setup
+const genAI = new GoogleGenerativeAI("");
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+// Preprocess Image Using Sharp for Better OCR
 async function preprocessImage(imagePath) {
-    const processedPath = `${imagePath.split('.').slice(0, -1).join('.')}_processed.png`;
+  const processedPath = `${imagePath.split(".").slice(0, -1).join(".")}_processed.png`;
 
-    try {
-        await sharp(imagePath)
-            .grayscale() // Convert to grayscale
-            .normalise() // Normalize contrast
-            .toFile(processedPath); // Save the processed image
+  try {
+    await sharp(imagePath)
+      .resize(1000) // Resize for better OCR accuracy
+      .grayscale() // Convert to grayscale
+      .normalise() // Normalize contrast
+      .toFile(processedPath); // Save the processed image
 
-        console.log('Image preprocessing complete:', processedPath);
-        return processedPath;
-    } catch (error) {
-        console.error('Error during image preprocessing:', error);
-        throw error;
-    }
+    console.log("Image preprocessing complete:", processedPath);
+    return processedPath;
+  } catch (error) {
+    console.error("Error during image preprocessing:", error);
+    throw error;
+  }
 }
 
-// Use Google Vision API for OCR
+// Google Vision API for OCR
 async function extractTextFromImage(imagePath) {
-    try {
-        const [result] = await client.textDetection(imagePath);
-        const detections = result.textAnnotations;
-        if (detections && detections.length > 0) {
-            console.log('Extracted Text:', detections[0].description);
-            return detections[0].description; // Return the first annotation (full text)
-        } else {
-            throw new Error('No text detected in the image.');
-        }
-    } catch (error) {
-        console.error('Error during text extraction:', error);
-        throw error;
-    }
-}
-
-// Solve algebraic equation with detailed steps
-function solveAlgebraicEquationDetailed(text) {
-    const steps = [];
-    const equationMatch = text.match(/([a-zA-Z0-9\s\+\-\*\/\=]+)/);
-
-    if (equationMatch) {
-        const equationString = equationMatch[0];
-        try {
-            const equation = algebra.parse(equationString);
-            if (!(equation instanceof algebra.Equation)) {
-                steps.push("No valid equation found.");
-                return steps;
-            }
-
-            steps.push(`Extracted equation: ${equationString}`);
-            let currentEquation = equation;
-            steps.push(`Start with the equation: ${currentEquation.toString()}`);
-
-            // Separate variable and constant terms
-            let variableTerm = null;
-            let constantSum = 0;
-            currentEquation.lhs.terms.forEach(term => {
-                if (term.variables.length > 0) {
-                    variableTerm = term;
-                } else {
-                    constantSum += term.coefficients[0]; // Sum all constant terms
-                }
-            });
-
-            if (constantSum !== 0) {
-                currentEquation = new algebra.Equation(
-                    currentEquation.lhs.subtract(constantSum),
-                    currentEquation.rhs.subtract(constantSum)
-                );
-                steps.push(`Move constants to the other side: ${currentEquation.toString()}`);
-            } else {
-                steps.push(' No constants to move.');
-            }
-
-            // Divide by the coefficient of the variable
-            if (!variableTerm) {
-                steps.push("Error: No variable found in the equation.");
-                return steps;
-            }
-
-            const coefficient = variableTerm.coefficients[0];
-            if (coefficient !== 1) {
-                currentEquation = new algebra.Equation(
-                    currentEquation.lhs.divide(coefficient),
-                    currentEquation.rhs.divide(coefficient)
-                );
-                steps.push(`Divide by the coefficient of the variable: ${currentEquation.toString()}`);
-            }
-
-            // Final solution
-            const rhsString = currentEquation.rhs.toString();
-            const solution = eval(rhsString); // Evaluate the numeric output
-            steps.push(`Step 5: Final solution: ${variableTerm.variables[0]} = ${solution}`);
-        } catch (error) {
-            steps.push(`Error solving the equation: ${error.message}`);
-        }
+  try {
+    const [result] = await googleClient.textDetection(imagePath);
+    const detections = result.textAnnotations;
+    if (detections && detections.length > 0) {
+      return detections[0].description; // Return extracted text
     } else {
-        steps.push("No valid equation found.");
+      throw new Error("No text detected in the image.");
     }
-
-    return steps;
+  } catch (error) {
+    console.error("Error with Google Vision OCR:", error);
+    throw error;
+  }
 }
 
-// Main function
-async function solveImageQuestion(imagePath) {
-    try {
-        console.log('Preprocessing the image...');
-        const processedImagePath = await preprocessImage(imagePath);
+// Gemini AI for Solving Math Problems
+async function solveEquationWithGemini(equation) {
+  try {
+    const prompt = `Solve the following math problem and explain the steps: ${equation}`;
+    const result = await model.generateContent(prompt);
 
-        console.log('Extracting text from the image...');
-        const extractedText = await extractTextFromImage(processedImagePath);
-
-        const cleanedText = validateAndCleanText(extractedText);
-        const steps = solveAlgebraicEquationDetailed(cleanedText);
-
-        if (steps.length > 0) {
-            console.log('Step-by-step solution:');
-            steps.forEach((step, index) => {
-                console.log(`Step ${index + 1}: ${step}`);
-            });
-        } else {
-            console.log('No solvable algebraic equation detected.');
-        }
-    } catch (error) {
-        console.error('Error processing the image:', error);
+    if (result && result.response && result.response.text()) {
+      return result.response.text();
     }
+
+    return "No detailed solution available.";
+  } catch (error) {
+    console.error("Error with Gemini AI:", error.response?.data || error.message);
+    throw error;
+  }
 }
 
-// Clean up extracted text
+// Gemini AI for Checking Work
+async function checkWorkWithGemini(studentWork, problem) {
+  try {
+    const prompt = `Check the following student work for the given math problem and provide annotations on any errors or areas for improvement:\n\nProblem: ${problem}\nStudent Work: ${studentWork}`;
+    const result = await model.generateContent(prompt);
+
+    if (result && result.response && result.response.text()) {
+      return result.response.text();
+    }
+
+    return "No annotations available.";
+  } catch (error) {
+    console.error("Error with Gemini AI:", error.response?.data || error.message);
+    throw error;
+  }
+}
+
+// Clean and Validate Extracted Text
 function validateAndCleanText(text) {
-    const equationRegex = /[a-zA-Z0-9\+\-\*\/\=\s]+/g;
-    const matches = text.match(equationRegex);
-    if (matches) {
-        return matches.join('').replace(/\s+/g, ''); // Remove spaces
-    }
-    return text;
+  const equationRegex = /[a-zA-Z0-9\+\-\*\/\=\s]+/g;
+  const matches = text.match(equationRegex);
+  if (matches) {
+    return matches.join("").replace(/\s+/g, ""); // Remove extra spaces
+  }
+  return text;
 }
 
-// Run the program
-solveImageQuestion('');
+// Main Function to Process Image and Solve/Check Equation
+async function processImageQuestion(imagePath) {
+  try {
+    console.log("Preprocessing the image...");
+    const processedImagePath = await preprocessImage(imagePath);
+
+    console.log("Extracting text using Google Vision...");
+    const extractedText = await extractTextFromImage(processedImagePath);
+
+    if (extractedText.includes("QTAR")) {
+      console.log("Detected 'QTAR': Solving the equation.");
+      const equation = extractedText.replace("QTAR", "").trim();
+      const cleanedEquation = validateAndCleanText(equation);
+      console.log("Cleaned Equation:", cleanedEquation);
+
+      console.log("Solving equation using Gemini AI...");
+      const solution = await solveEquationWithGemini(cleanedEquation);
+
+      console.log("\nFinal Solution:");
+      console.log(solution);
+    } else if (extractedText.includes("CTAR")) {
+      console.log("Detected 'CTAR': Checking student work.");
+      const parts = extractedText.split("CTAR");
+      const problem = parts[0].trim();
+      const studentWork = parts[1].trim();
+
+      console.log("Checking work using Gemini AI...");
+      const annotations = await checkWorkWithGemini(studentWork, problem);
+
+      console.log("\nAnnotations:");
+      console.log(annotations);
+    } else {
+      console.log("No 'QTAR' or 'CTAR' detected in the image.");
+    }
+  } catch (error) {
+    console.error("Error processing the image:", error);
+  }
+}
+
+// Run the Program
+processImageQuestion("");
