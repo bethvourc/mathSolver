@@ -1,97 +1,93 @@
 const axios = require("axios");
 const vision = require("@google-cloud/vision");
 const sharp = require("sharp");
+const fs = require("fs");
+const pdfkit = require("pdfkit");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Google Vision API Setup
 const googleClient = new vision.ImageAnnotatorClient({
-  keyFilename: "",
+  keyFilename: "/Users/bethvour/projects/mathSolver/sanguine-willow-449120-c9-eda7b64969a5.json",
 });
 
 // Gemini AI Setup
-const genAI = new GoogleGenerativeAI("");
+const genAI = new GoogleGenerativeAI("AIzaSyCEYrxZEKAw-N9zi9UwzRHaswzXgJPB8cY");
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// Preprocess Image Using Sharp for Better OCR
+// Preprocess Image
 async function preprocessImage(imagePath) {
   const processedPath = `${imagePath.split(".").slice(0, -1).join(".")}_processed.png`;
-
-  try {
-    await sharp(imagePath)
-      .resize(1000) // Resize for better OCR accuracy
-      .grayscale() // Convert to grayscale
-      .normalise() // Normalize contrast
-      .toFile(processedPath); // Save the processed image
-
-    console.log("Image preprocessing complete:", processedPath);
-    return processedPath;
-  } catch (error) {
-    console.error("Error during image preprocessing:", error);
-    throw error;
-  }
+  await sharp(imagePath).resize(1200).grayscale().sharpen().toFile(processedPath);
+  return processedPath;
 }
 
 // Google Vision API for OCR
 async function extractTextFromImage(imagePath) {
-  try {
-    const [result] = await googleClient.textDetection(imagePath);
-    const detections = result.textAnnotations;
-    if (detections && detections.length > 0) {
-      return detections[0].description; // Return extracted text
-    } else {
-      throw new Error("No text detected in the image.");
-    }
-  } catch (error) {
-    console.error("Error with Google Vision OCR:", error);
-    throw error;
+  const [result] = await googleClient.textDetection(imagePath);
+  const detections = result.textAnnotations;
+  if (detections && detections.length > 0) {
+    return detections[0].description;
+  } else {
+    throw new Error("No text detected in the image.");
   }
 }
 
-// Gemini AI for Solving Math Problems
-async function solveEquationWithGemini(equation) {
-  try {
-    const prompt = `Solve the following math problem and explain the steps: ${equation}`;
-    const result = await model.generateContent(prompt);
-
-    if (result && result.response && result.response.text()) {
-      return result.response.text();
-    }
-
-    return "No detailed solution available.";
-  } catch (error) {
-    console.error("Error with Gemini AI:", error.response?.data || error.message);
-    throw error;
-  }
+// Solve the equation using Gemini AI
+async function solveEquation(equation) {
+  const prompt = `Solve the following math problem and provide step-by-step explanations:\n\n${equation}`;
+  const result = await model.generateContent(prompt);
+  return result?.response?.text() || "Solution unavailable.";
 }
 
-// Gemini AI for Checking Work
-async function checkWorkWithGemini(studentWork, problem) {
-  try {
-    const prompt = `Check the following student work for the given math problem and provide annotations on any errors or areas for improvement:\n\nProblem: ${problem}\nStudent Work: ${studentWork}`;
-    const result = await model.generateContent(prompt);
-
-    if (result && result.response && result.response.text()) {
-      return result.response.text();
-    }
-
-    return "No annotations available.";
-  } catch (error) {
-    console.error("Error with Gemini AI:", error.response?.data || error.message);
-    throw error;
-  }
+// Check student's work using Gemini AI
+async function checkStudentWork(studentWork, problem) {
+  const prompt = `The student attempted to solve this equation: ${problem}.
+  Here is their work: ${studentWork}
+  Analyze their solution and provide feedback on errors and how to fix them.`;
+  
+  const result = await model.generateContent(prompt);
+  return result?.response?.text() || "No feedback available.";
 }
 
-// Clean and Validate Extracted Text
-function validateAndCleanText(text) {
-  const equationRegex = /[a-zA-Z0-9\+\-\*\/\=\s]+/g;
-  const matches = text.match(equationRegex);
-  if (matches) {
-    return matches.join("").replace(/\s+/g, ""); // Remove extra spaces
-  }
-  return text;
+// Generate PDF file for QTAR (Equation + Solution)
+function generateSolutionPDF(equation, solution, outputPath) {
+  const doc = new pdfkit();
+  doc.pipe(fs.createWriteStream(outputPath));
+
+  doc.fontSize(20).text("Math Equation Solution", { align: "center" });
+  doc.moveDown();
+
+  doc.fontSize(16).text("Step-by-Step Solution:");
+  doc.fontSize(14).text(solution, { width: 500 });
+
+  doc.end();
+  console.log(`PDF created: ${outputPath}`);
 }
 
-// Main Function to Process Image and Solve/Check Equation
+// Generate PDF file for CTAR (Feedback on Mistakes)
+function generateFeedbackPDF(problem, studentWork, feedback, outputPath) {
+  const doc = new pdfkit();
+  doc.pipe(fs.createWriteStream(outputPath));
+
+  doc.fontSize(20).text("Math Work Evaluation", { align: "center" });
+  doc.moveDown();
+
+  doc.fontSize(16).text("Problem Given:");
+  doc.fontSize(14).text(problem);
+  doc.moveDown();
+
+  doc.fontSize(16).text("Student's Work:");
+  doc.fontSize(14).text(studentWork);
+  doc.moveDown();
+
+  doc.fontSize(16).text("Feedback & Corrections:");
+  doc.fontSize(14).text(feedback);
+  
+  doc.end();
+  console.log(`PDF created: ${outputPath}`);
+}
+
+// Main function
 async function processImageQuestion(imagePath) {
   try {
     console.log("Preprocessing the image...");
@@ -103,14 +99,16 @@ async function processImageQuestion(imagePath) {
     if (extractedText.includes("QTAR")) {
       console.log("Detected 'QTAR': Solving the equation.");
       const equation = extractedText.replace("QTAR", "").trim();
-      const cleanedEquation = validateAndCleanText(equation);
-      console.log("Cleaned Equation:", cleanedEquation);
-
+      
       console.log("Solving equation using Gemini AI...");
-      const solution = await solveEquationWithGemini(cleanedEquation);
+      const solution = await solveEquation(equation);
 
       console.log("\nFinal Solution:");
       console.log(solution);
+
+      const outputPDFPath = `${imagePath.split(".").slice(0, -1).join(".")}_solution.pdf`;
+      generateSolutionPDF(equation, solution, outputPDFPath);
+      
     } else if (extractedText.includes("CTAR")) {
       console.log("Detected 'CTAR': Checking student work.");
       const parts = extractedText.split("CTAR");
@@ -118,10 +116,14 @@ async function processImageQuestion(imagePath) {
       const studentWork = parts[1].trim();
 
       console.log("Checking work using Gemini AI...");
-      const annotations = await checkWorkWithGemini(studentWork, problem);
+      const feedback = await checkStudentWork(studentWork, problem);
 
-      console.log("\nAnnotations:");
-      console.log(annotations);
+      console.log("\nFeedback:");
+      console.log(feedback);
+
+      const outputPDFPath = `${imagePath.split(".").slice(0, -1).join(".")}_feedback.pdf`;
+      generateFeedbackPDF(problem, studentWork, feedback, outputPDFPath);
+      
     } else {
       console.log("No 'QTAR' or 'CTAR' detected in the image.");
     }
@@ -131,4 +133,4 @@ async function processImageQuestion(imagePath) {
 }
 
 // Run the Program
-processImageQuestion("");
+processImageQuestion("/Users/bethvour/projects/mathSolver/images/img2.jpeg");
