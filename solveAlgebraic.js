@@ -1,7 +1,6 @@
-const axios = require("axios");
-const vision = require("@google-cloud/vision");
-const sharp = require("sharp");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+import  vision from "@google-cloud/vision";
+import sharp from "sharp";
+import {GoogleGenerativeAI } from "@google/generative-ai";
 
 // Google Vision API Setup
 const googleClient = new vision.ImageAnnotatorClient({
@@ -94,7 +93,8 @@ function validateAndCleanText(text) {
 // Main Function to Process Image and Solve/Check Equation
 async function processImageQuestion(imagePath) {
   try {
-    console.log("Preprocessing the image...");
+    
+    console.log(`Preprocessing the image...${imagePath}`);
     const processedImagePath = await preprocessImage(imagePath);
 
     console.log("Extracting text using Google Vision...");
@@ -130,5 +130,4 @@ async function processImageQuestion(imagePath) {
   }
 }
 
-// Run the Program
-processImageQuestion("");
+export default processImageQuestion;
