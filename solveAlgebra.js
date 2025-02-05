@@ -90,6 +90,7 @@ function validateAndCleanText(text) {
 
 // Main Function to Process Image and Solve/Check Equation
 async function processImageQuestion(imagePath) {
+  var finalAnswer;
   try {
     
     console.log(`Preprocessing the image...${imagePath}`);
@@ -109,6 +110,7 @@ async function processImageQuestion(imagePath) {
 
       console.log("\nFinal Solution:");
       console.log(solution);
+      finalAnswer = JSON.parse(`{steps: ${solution}}`);
     } else if (extractedText.includes("CTAR")) {
       console.log("Detected 'CTAR': Checking student work.");
       const parts = extractedText.split("CTAR");
@@ -120,12 +122,16 @@ async function processImageQuestion(imagePath) {
 
       console.log("\nAnnotations:");
       console.log(annotations);
+      finalAnswer = JSON.parse(`{steps: ${annotations}}`)
     } else {
       console.log("No 'QTAR' or 'CTAR' detected in the image.");
+      finalAnswer = JSON.parse(`{error: No 'QTAR' or 'CTAR' detected in the image.}`)
     }
   } catch (error) {
     console.error("Error processing the image:", error);
+    finalAnswer = JSON.parse(`error: ${error}`);
   }
+  return finalAnswer;
 }
 
 export default processImageQuestion;
