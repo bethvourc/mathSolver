@@ -3,7 +3,7 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import multer from 'multer';
 import path from 'path';
-import processImageQuestion from './solveAlgebraic.js';
+import processImageQuestion from './solveAlgebra.js';
 const app = express();
 app.use(bodyParser.json());
 

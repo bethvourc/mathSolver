@@ -3,12 +3,10 @@ import sharp from "sharp";
 import {GoogleGenerativeAI } from "@google/generative-ai";
 
 // Google Vision API Setup
-const googleClient = new vision.ImageAnnotatorClient({
-  keyFilename: "",
-});
+const googleClient = new vision.ImageAnnotatorClient();
 
 // Gemini AI Setup
-const genAI = new GoogleGenerativeAI("");
+const genAI = new GoogleGenerativeAI("GEMINI_API_KEY");
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 // Preprocess Image Using Sharp for Better OCR

@@ -13,13 +13,16 @@ RUN npm install
 # Copy the rest of the application files
 COPY . .
 
+# Copy the Google Cloud service account key
+COPY gen-lang-client-0486206811-5e107c97bd67.json /app/keyfile.json
+
 # Ensure Sharp dependencies are installed
 RUN apk add --no-cache \
     vips-dev \
     fftw-dev \
     --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing
 
-# Set environment variables for Google Cloud authentication (if applicable)
+# Set environment variables for Google Cloud authentication
 ENV GOOGLE_APPLICATION_CREDENTIALS="/app/keyfile.json"
 
 # Expose the necessary port (if applicable, modify as needed)
