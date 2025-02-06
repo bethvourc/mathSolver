@@ -6,7 +6,7 @@ import {GoogleGenerativeAI } from "@google/generative-ai";
 const googleClient = new vision.ImageAnnotatorClient();
 
 // Gemini AI Setup
-const genAI = new GoogleGenerativeAI("GEMINI_API_KEY");
+const genAI = new GoogleGenerativeAI("GEMINI_API_KEY"); // TODO for me: Change to Gemini API Bethvour 
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 // Preprocess Image Using Sharp for Better OCR
@@ -90,9 +90,8 @@ function validateAndCleanText(text) {
 
 // Main Function to Process Image and Solve/Check Equation
 async function processImageQuestion(imagePath) {
-  var finalAnswer;
+  let finalAnswer;
   try {
-    
     console.log(`Preprocessing the image...${imagePath}`);
     const processedImagePath = await preprocessImage(imagePath);
 
@@ -110,7 +109,7 @@ async function processImageQuestion(imagePath) {
 
       console.log("\nFinal Solution:");
       console.log(solution);
-      finalAnswer = JSON.parse(`{steps: ${solution}}`);
+      finalAnswer = { steps: solution };
     } else if (extractedText.includes("CTAR")) {
       console.log("Detected 'CTAR': Checking student work.");
       const parts = extractedText.split("CTAR");
@@ -122,14 +121,14 @@ async function processImageQuestion(imagePath) {
 
       console.log("\nAnnotations:");
       console.log(annotations);
-      finalAnswer = JSON.parse(`{steps: ${annotations}}`)
+      finalAnswer = { steps: annotations };
     } else {
       console.log("No 'QTAR' or 'CTAR' detected in the image.");
-      finalAnswer = JSON.parse(`{error: No 'QTAR' or 'CTAR' detected in the image.}`)
+      finalAnswer = { error: "No 'QTAR' or 'CTAR' detected in the image." };
     }
   } catch (error) {
     console.error("Error processing the image:", error);
-    finalAnswer = JSON.parse(`error: ${error}`);
+    finalAnswer = { error: error.message || "Unknown error occurred" };
   }
   return finalAnswer;
 }
