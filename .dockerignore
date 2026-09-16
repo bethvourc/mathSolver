@@ -1,0 +1,11 @@
+.git
+node_modules
+.env
+.env.*
+*key*.json
+gen-lang-client-*.json
+sanguine-willow-*.json
+uploads
+images
+eng.traineddata
+.DS_Store

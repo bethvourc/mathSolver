@@ -1,11 +1,10 @@
 import express from "express";
 import cors from "cors";
-import bodyParser from "body-parser";
 import multer from 'multer';
 import path from 'path';
 import processImageQuestion from './solveAlgebra.js';
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 
 const storage = multer.diskStorage({
   destination: function(req, file, cb) {
@@ -45,6 +44,6 @@ app.post('/solve', upload.single('image'), async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`Server is running on port ${server.address().port}`);
 });

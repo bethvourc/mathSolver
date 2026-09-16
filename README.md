@@ -35,8 +35,10 @@ cd algebra-solver-ai
 
 ### 2. Install Dependencies
 
+Use Node.js 22 or newer (the Docker image uses Node.js 24).
+
 ```bash
-npm install
+npm ci
 ```
 
 ### 3. Setup Environment Variables
@@ -115,12 +117,19 @@ To build and run the app in Docker:
 
 ```bash
 docker build -t algebra-solver .
-docker run -p 3000:3000 algebra-solver
+docker run -p 3000:3000 \
+  -v /absolute/path/to/google-credentials.json:/run/secrets/google.json:ro \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/google.json \
+  algebra-solver
 ```
 
 ---
 
 ## ⚠️ Notes
+
+- Run `npm test` for dependency compatibility and upload regression checks, and `npm audit` for dependency advisories.
+- Dependencies are installed from `package-lock.json`; do not commit `node_modules`.
+- Mount Google Cloud credentials at runtime; they are excluded from the Docker build context.
 
 - The image must clearly show the math problem.
 - `QTAR` and `CTAR` are required tags for the system to understand the intent.

@@ -3,3 +3,7 @@
 /images
 /uploads
 /gen-lang-client-0486206811-5e107c97bd67.json
+/node_modules/
+/.env
+/.env.*
+/.DS_Store
